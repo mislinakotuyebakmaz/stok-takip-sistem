@@ -1395,19 +1395,12 @@ if (stockFilter) {
 
        
         if (this.currentTab === 'products') {
-            // Products tab'ına geçince tabloyu temizle
-            const tbody = document.getElementById('productsTableBody');
-            if (tbody) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="9" style="text-align: center; padding: 40px; color: #666;">
-                            <div style="font-size: 1.2rem; margin-bottom: 10px;">🔍</div>
-                            <div>Ürünleri görmek için yukarıdaki filtrelerden birini seçin</div>
-                        </td>
-                    </tr>
-                `;
-            }
-        } else if (tabName === 'dashboard') {
+            // Products tab'ına geçince tüm ürünleri göster
+            setTimeout(() => {
+                this.renderProductsTable();
+            }, 100);
+        }
+        else if (tabName === 'dashboard') {
             this.updateHeaderStats();
             this.renderCriticalAlerts();
         }
@@ -1635,14 +1628,16 @@ InventoryManager.prototype.renderProductsTable = function() {
     const tbody = document.getElementById('productsTableBody');
     if (!tbody) return;
 
-    // Filtreleri al
-    const filters = {
-        category: document.getElementById('categoryFilter')?.value || '',
-        stockStatus: document.getElementById('stockFilter')?.value || '',
-        search: document.getElementById('searchProducts')?.value || ''
-    };
+   // Filtreleri al
+const filters = {
+    category: document.getElementById('categoryFilter')?.value || '',
+    stockStatus: document.getElementById('stockFilter')?.value || '',
+    search: document.getElementById('searchProducts')?.value || ''
+};
 
-    const products = this.getFilteredProducts(filters);
+// Eğer hiç filtre seçilmemişse tüm ürünleri göster
+const hasAnyFilter = filters.category || filters.stockStatus || filters.search;
+const products = hasAnyFilter ? this.getFilteredProducts(filters) : this.products;
 
 
     if (products.length === 0) {
