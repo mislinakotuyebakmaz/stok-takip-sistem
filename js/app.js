@@ -234,6 +234,41 @@ function updateFilterChips() {
         selectedFiltersSection.style.display = hasFilters ? 'block' : 'none';
     }
 }
+// Kritik stok için admin kontrolü
+function requestAdminForCriticalStock(productCode, productName) {
+    console.log(`🔒 Kritik stok düzenleme talebi: ${productCode} - ${productName}`);
+    
+    // Admin kontrolü
+    if (!adminAuthenticated) {
+        // Admin modal'ı aç
+        openAdminModal('editCriticalStock', productCode, `${productName} Düzenle`);
+        return;
+    }
+    
+    // Admin doğrulandıysa direkt düzenleme yapabilir
+    editCriticalStockProduct(productCode, productName);
+}
+
+// Kritik stok ürünü düzenleme
+function editCriticalStockProduct(productCode, productName) {
+    console.log(`✏️ Kritik stok ürünü düzenleniyor: ${productCode}`);
+    
+    if (!inventory) {
+        alert('❌ Envanter sistemi bulunamadı!');
+        return;
+    }
+    
+    // Ürün koduna göre ürünü bul
+    const product = inventory.products.find(p => p.code === productCode);
+    
+    if (!product) {
+        alert(`❌ ${productCode} kodlu ürün bulunamadı!`);
+        return;
+    }
+    
+    // inventory.editProduct fonksiyonunu çağır
+    inventory.editProduct(product.id);
+}
 
 function createFilterChip(text, type, value = null) {
     const chip = document.createElement('div');
@@ -414,40 +449,7 @@ function applyQuickFilter(filterType, isActive) {
     applyFilters();
 }
 
-// Advanced search functionality
-function initializeAdvancedSearch() {
-    const searchInput = document.getElementById('searchProducts');
-    const searchBtn = document.getElementById('searchBtn');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
-    
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            filterState.search = this.value;
-            updateFilterChips();
-            applyFilters();
-        });
-    }
-    
-    if (searchBtn) {
-        searchBtn.addEventListener('click', function() {
-            const searchTerm = searchInput.value.trim();
-            if (searchTerm) {
-                filterState.search = searchTerm;
-                updateFilterChips();
-                applyFilters();
-            }
-        });
-    }
-    
-    if (clearSearchBtn) {
-        clearSearchBtn.addEventListener('click', function() {
-            searchInput.value = '';
-            filterState.search = '';
-            updateFilterChips();
-            applyFilters();
-        });
-    }
-}
+
 
 // Initialize clear all filters button
 function initializeClearAllFilters() {
@@ -685,6 +687,75 @@ function initializeRealTimeValidation() {
     });
 }
 
+// Dashboard arama işlemi
+function performDashboardSearch() {
+    console.log('🔍 Arama fonksiyonu çağrıldı');
+    
+    const searchInput = document.getElementById('dashboardSearchInput');
+    
+    if (!searchInput) {
+        console.log('❌ Arama input bulunamadı');
+        alert('❌ Arama kutusu bulunamadı!');
+        return;
+    }
+    
+    console.log('✅ Search input bulundu:', searchInput);
+    console.log('Input value:', searchInput.value);
+    
+    const searchTerm = (searchInput.value || '').trim();
+    console.log('🔍 Arama terimi:', searchTerm);
+    
+    if (!searchTerm) {
+        alert('🔍 Lütfen aranacak ürün adını girin!');
+        // Input'a focus ver
+        searchInput.focus();
+        return;
+    }
+    
+    if (!inventory?.products) {
+        alert('📦 Ürün listesi bulunamadı!');
+        return;
+    }
+    
+    console.log('📦 Toplam ürün:', inventory.products.length);
+    
+    // Arama yap
+    const results = inventory.products.filter(product => 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    console.log(`🎯 Arama sonucu: ${results.length} ürün bulundu`);
+    
+    if (results.length === 0) {
+        alert(`🔍 "${searchTerm}" için sonuç bulunamadı!`);
+        return;
+    }
+    
+    // Ürünler sekmesine git
+    inventory.showTab('products');
+    
+    // Sonuçları göster
+    alert(`🔍 "${searchTerm}" için ${results.length} sonuç bulundu!\n\nÜrünler: ${results.map(p => p.name).join(', ')}`);
+    
+    // Input'u temizle
+    searchInput.value = '';
+}
+
+// Enter tuşu ile arama
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('dashboardSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performDashboardSearch();
+            }
+        });
+        console.log('✅ Dashboard arama listener eklendi');
+    }
+});
+
 
 
 // Product Class - Ürün nesnesini temsil eder
@@ -902,6 +973,7 @@ class InventoryManager {
         this.refreshAllViews();
         return true;
     }
+    
 
     
     // ID ile ürün bulma
@@ -1123,14 +1195,20 @@ getSortedProducts(products) {
         }
 
         // Arama ve filtreleme (ESKİ SİSTEM)
-const quickSearch = document.getElementById('quickSearch');
+const quickSearch = document.getElementById('dashboardSearchInput');
 const searchProducts = document.getElementById('searchProducts');
 const categoryFilter = document.getElementById('categoryFilter');
 const stockFilter = document.getElementById('stockFilter');
-
-if (quickSearch) {
-    quickSearch.addEventListener('input', () => this.handleQuickSearch());
+// Dashboard'daki Hızlı Arama Butonunu Dinle
+const dashboardSearchBtn = document.getElementById('dashboardSearchBtn');
+if (dashboardSearchBtn) {
+    dashboardSearchBtn.addEventListener('click', () => {
+        // Butona basıldığında arama işlemini yapacak fonksiyonu çağır
+        this.performQuickSearchAndShowMessage();
+    });
 }
+
+
 
 if (searchProducts) {
     searchProducts.addEventListener('input', () => this.renderProductsTable());
@@ -1264,14 +1342,15 @@ if (stockFilter) {
                     <strong>${alert.name}</strong> (${alert.code})
                     <br><small>${alert.message}</small>
                 </div>
-                <button class="btn-edit" onclick="inventory.editProduct('${alert.id}')">
-                    Düzenle
-                </button>
+                <button class="btn-edit" onclick="requestAdminForCriticalStock('${alert.code}', '${alert.name}')">
+    Düzenle
+</button>
             </div>
         `).join('');
 
         alertsContainer.innerHTML = alertsHTML;
     }
+    
 
 
 
@@ -1362,6 +1441,36 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('✅ Sistem hazır!');
     }, 500);
 });
+InventoryManager.prototype.performQuickSearchAndShowMessage = function() {
+    // 1. Arama kutusundaki değeri al
+    const searchInput = document.getElementById('dashboardSearchInput');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+
+    // Arama kutusu boşsa hiçbir şey yapma
+    if (searchTerm === '') {
+        this.showMessage('Lütfen bir arama terimi girin.', 'error'); // veya hiçbir şey yapma
+        return;
+    }
+
+    // 2. Arama terimine uyan İLK ürünü bul
+    // .find() metodu, koşula uyan ilk elemanı bulur ve aramayı durdurur. Daha verimlidir.
+    const foundProduct = this.products.find(product =>
+        product.name.toLowerCase().includes(searchTerm) ||
+        product.code.toLowerCase().includes(searchTerm)
+    );
+
+    // 3. Sonuca göre mesaj göster
+    if (foundProduct) {
+        // Ürün bulunduysa, başarı mesajı göster
+        this.showMessage(`✅ Ürün bulundu: ${foundProduct.name} (Stok: ${foundProduct.quantity})`, 'success');
+    } else {
+        // Ürün bulunamadıysa, hata mesajı göster
+        this.showMessage('❌ Bu kritere uygun ürün bulunamadı.', 'error');
+    }
+
+    // İsteğe bağlı: Aramadan sonra arama kutusunu temizle
+    // searchInput.value = ''; 
+};
 
 // Global helper functions
 function showTab(tabName) {
@@ -1628,49 +1737,7 @@ InventoryManager.prototype.editProduct = function(productId) {
 
 
 
-// Hızlı arama
-InventoryManager.prototype.handleQuickSearch = function() {
-    const searchTerm = document.getElementById('quickSearch').value.toLowerCase();
-    
-    if (searchTerm.trim() === '') {
-        // Arama boşsa dashboard'ı göster
-        this.renderCriticalAlerts();
-        return;
-    }
 
-    // Arama sonuçlarını filtrele
-    const results = this.products.filter(product => 
-        product.name.toLowerCase().includes(searchTerm) ||
-        product.code.toLowerCase().includes(searchTerm) ||
-        product.category.toLowerCase().includes(searchTerm)
-    );
-
-    // Sonuçları alert container'da göster
-    const alertsContainer = document.getElementById('criticalAlerts');
-    if (!alertsContainer) return;
-
-    if (results.length === 0) {
-        alertsContainer.innerHTML = '<p class="no-alerts">Arama kriterlerine uygun ürün bulunamadı</p>';
-        return;
-    }
-
-    const resultsHTML = results.slice(0, 5).map(product => `
-        <div class="alert-item">
-            <div>
-                <strong>${product.name}</strong> (${product.code})
-                <br><small>Kategori: ${product.category} | Stok: ${product.quantity} adet</small>
-            </div>
-            <button class="btn-edit" onclick="inventory.editProduct('${product.id}')">
-                Görüntüle
-            </button>
-        </div>
-    `).join('');
-
-    alertsContainer.innerHTML = resultsHTML + 
-        (results.length > 5 ? `<p style="text-align: center; margin-top: 10px; color: #666;">
-            ${results.length - 5} ürün daha bulundu...
-        </p>` : '');
-};
 
 
 
@@ -1785,8 +1852,7 @@ function debounce(func, wait) {
     };
 }
 
-// Arama için debounce uygula
-InventoryManager.prototype.handleQuickSearch = debounce(InventoryManager.prototype.handleQuickSearch, 300);
+
 
 // Local Storage boyut kontrolü
 InventoryManager.prototype.checkStorageQuota = function() {
@@ -2149,6 +2215,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    
+    console.log('🔍 Dashboard arama sistemi hazır');
 });
 
 // Bekleyen işlemi gerçekleştir
@@ -2184,6 +2253,12 @@ function executePendingAction() {
 
         case 'clearAll':
            // inventory yerine window kullan
+           case 'editCriticalStock':
+           // Kritik stok ürünü düzenleme
+    const productCode = pendingAdminAction.productId;
+    const productName = pendingAdminAction.productName;
+    editCriticalStockProduct(productCode, productName);
+    break;
     if (window.inventory) {
         window.inventory.clearAllData();
     }
@@ -2787,15 +2862,189 @@ function switchChartType(chartId, newType) {
 
 // Export functions
 function exportToPDF() {
-    alert('📄 PDF export özelliği yakında eklenecek!');
+      // Basit rapor metni oluştur
+    let reportContent = `
+    📊 ENVANTER RAPORU
+    ===================
+    
+    Rapor Tarihi: ${new Date().toDateString()}
+    
+    📈 ÖZET BİLGİLER:
+    `;
+    
+        if (inventory && inventory.products) {
+            const stockStatus = calculateStockStatus();
+            const totalProducts = inventory.products.length;
+            
+            reportContent += `
+    - Toplam Ürün: ${totalProducts} adet
+    - Stokta Var: ${stockStatus.inStock} ürün  
+    - Düşük Stok: ${stockStatus.lowStock} ürün
+    - Stokta Yok: ${stockStatus.outOfStock} ürün
+    
+    📋 ÜRÜN LİSTESİ:
+    ===============
+    `;
+    
+            inventory.products.forEach((product, index) => {
+                reportContent += `
+    ${index + 1}. ${product.name}
+       Kod: ${product.code}
+       Kategori: ${product.category}
+       Miktar: ${product.quantity} ${product.unit}
+       Fiyat: ${product.salePrice} TL
+       Durum: ${getStockStatusText(product.getStockStatus())}
+    `;
+            });
+        }
+    
+        // Yeni pencerede göster ve print
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Envanter Raporu</title>
+                <style>
+                    body { font-family: monospace; margin: 20px; line-height: 1.6; }
+                    pre { white-space: pre-wrap; }
+                </style>
+            </head>
+            <body>
+                <pre>${reportContent}</pre>
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                        }, 500);
+                    }
+                </script>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        console.log('✅ PDF print penceresi açıldı');
 }
 
 function exportToExcel() {
-    alert('📈 Excel export özelliği yakında eklenecek!');
+    console.log('📊 Excel export başlatılıyor...');
+    
+    if (!inventory || !inventory.products || inventory.products.length === 0) {
+        alert('📊 Export edilecek ürün bulunamadı!');
+        return;
+    }
+    
+    // Excel verisini hazırla
+    const headers = ['Ürün Kodu', 'Ürün Adı', 'Kategori', 'Miktar', 'Birim', 'Alış Fiyatı', 'Satış Fiyatı', 'Toplam Değer', 'Stok Durumu', 'Ekleme Tarihi'];
+    
+    const rows = inventory.products.map(product => [
+        product.code,
+        product.name,
+        product.category,
+        product.quantity,
+        product.unit,
+        product.costPrice,
+        product.salePrice,
+        product.getTotalValue(),
+        getStockStatusText(product.getStockStatus()),
+        new Date(product.createdAt).toLocaleDateString('tr-TR')
+    ]);
+    
+    // CSV formatında oluştur
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += headers.join(',') + '\n';
+    
+    rows.forEach(row => {
+        csvContent += row.map(field => `"${field}"`).join(',') + '\n';
+    });
+    
+    // Dosyayı indir
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Envanter_Raporu_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log('✅ Excel/CSV raporu oluşturuldu');
 }
 
+
 function exportToImage() {
-    alert('🖼️ Grafik export özelliği yakında eklenecek!');
+    if (!chartInstances || Object.keys(chartInstances).length === 0) {
+        alert('🖼️ Export edilecek grafik bulunamadı!');
+        return;
+    }
+    
+    // Canvas'ları birleştirip tek resim yap
+    createCombinedChartImage();
+}
+
+function createCombinedChartImage() {
+    // Yeni canvas oluştur
+    const combinedCanvas = document.createElement('canvas');
+    const ctx = combinedCanvas.getContext('2d');
+    
+    // Canvas boyutları
+    combinedCanvas.width = 1200;
+    combinedCanvas.height = 800;
+    
+    // Arka plan
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+    
+    // Başlık
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('📊 Envanter Raporları', combinedCanvas.width / 2, 40);
+    
+    // Tarih
+    ctx.font = '14px Arial';
+    ctx.fillText(new Date().toLocaleDateString('tr-TR'), combinedCanvas.width / 2, 65);
+    
+    // Grafikleri yerleştir
+    let yOffset = 100;
+    let xOffset = 50;
+    const chartWidth = 500;
+    const chartHeight = 300;
+    
+    const chartKeys = Object.keys(chartInstances);
+    
+    chartKeys.forEach((chartKey, index) => {
+        const chart = chartInstances[chartKey];
+        if (chart && chart.canvas) {
+            // Grafik konumu hesapla
+            const x = (index % 2) * (chartWidth + 100) + xOffset;
+            const y = Math.floor(index / 2) * (chartHeight + 50) + yOffset;
+            
+            // Grafik başlığı
+            ctx.fillStyle = '#34495e';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            
+            const titles = {
+                'stockChart': '🎯 Stok Durumu',
+                'categoryChart': '📂 Kategori Dağılımı',
+                'valueChart': '💎 Değer Analizi',
+                'trendChart': '📊 Trend Analizi'
+            };
+            
+            ctx.fillText(titles[chartKey] || chartKey, x, y - 10);
+            
+            // Grafiği çiz
+            ctx.drawImage(chart.canvas, x, y, chartWidth, chartHeight);
+        }
+    });
+    
+    // Resmi indir
+    const link = document.createElement('a');
+    link.download = `Envanter_Grafikleri_${new Date().toISOString().split('T')[0]}.png`;
+    link.href = combinedCanvas.toDataURL();
+    link.click();
+    
+    console.log('✅ Grafik resmi oluşturuldu');
 }
 
 function refreshReports() {
