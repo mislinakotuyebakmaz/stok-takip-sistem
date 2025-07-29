@@ -8,6 +8,7 @@ const { swaggerUi, specs } = require('./config/swagger');
 
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products'); 
+const reportRoutes = require('./routes/report'); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 app.use('/api/auth', authRoutes);
 
 app.use('/api/products', productRoutes);
+app.use('/api/reports', reportRoutes); 
 
 // Test route
 app.get('/api/test', (req, res) => {
@@ -65,5 +67,6 @@ app.listen(PORT, () => {
     console.log(`Test URL: http://localhost:${PORT}/api/test`);
     console.log(`Auth API: http://localhost:${PORT}/api/auth`);
     console.log(`Products API: http://localhost:${PORT}/api/products`);
+    console.log(`Reports API: http://localhost:${PORT}/api/reports`); 
     console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
 });
