@@ -7,7 +7,13 @@ const {
     updateProduct,
     deleteProduct,
     getStatistics,
-    updateStock
+    updateStock,
+    getLowStockProducts,
+    getOutOfStockProducts,
+    getCategories,
+    searchProducts,
+    getProductsByPriceRange,
+    getBrands
 } = require('../controllers/productController');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
@@ -81,11 +87,94 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
  *           example: ["smartphone", "apple", "premium"]
  */
 
+// Public routes (authentication not required)
+/**
+ * @swagger
+ * /api/products/categories:
+ *   get:
+ *     summary: Tüm kategorileri ve istatistiklerini getir
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: Kategori listesi ve istatistikleri
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       category:
+ *                         type: string
+ *                       count:
+ *                         type: number
+ *                       totalValue:
+ *                         type: number
+ *                       avgPrice:
+ *                         type: number
+ *                       lowStockCount:
+ *                         type: number
+ *                       outOfStockCount:
+ *                         type: number
+ *                       stockHealth:
+ *                         type: number
+ *                         description: Stok sağlığı yüzdesi (0-100)
+ */
+router.get('/categories', getCategories);
+
+/**
+ * @swagger
+ * /api/products/brands:
+ *   get:
+ *     summary: Tüm markaları/tedarikçileri getir
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: Marka/tedarikçi listesi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       brand:
+ *                         type: string
+ *                       count:
+ *                         type: number
+ *                       totalValue:
+ *                         type: number
+ *                       categories:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                       avgProductValue:
+ *                         type: number
+ */
+router.get('/brands', getBrands);
+
+// Protected routes (authentication required)
+router.use(authenticateToken); // Bu noktadan sonra tüm route'lar auth gerektirir
+
 /**
  * @swagger
  * /api/products:
  *   get:
- *     summary: Tüm ürünleri getir
+ *     summary: Tüm ürünleri getir (gelişmiş filtreleme)
  *     tags: [Products]
  *     security:
  *       - bearerAuth: []
@@ -101,29 +190,31 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
  *         schema:
  *           type: integer
  *           default: 50
- *         description: Sayfa başına ürün sayısı
+ *         description: Sayfa başına kayıt sayısı
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
+ *           enum: [all, Elektronik, Giyim, Ev & Bahçe, Spor, Kitap, Kozmetik, Gıda, Oyuncak, Diğer]
  *         description: Kategori filtresi
  *       - in: query
  *         name: stockStatus
  *         schema:
  *           type: string
- *           enum: [in-stock, low-stock, out-of-stock]
- *         description: Stok durumu filtresi
+ *           enum: [all, in-stock, low-stock, out-of-stock, available]
+ *         description: Stok durumu filtresi (available = in-stock + low-stock)
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *         description: Arama terimi (ürün adı, kodu, açıklama)
+ *         description: Arama terimi (ad, kod, açıklama, tedarikçi)
  *       - in: query
  *         name: sortBy
  *         schema:
  *           type: string
+ *           enum: [createdAt, name, salePrice, quantity, totalValue, profitMargin]
  *           default: createdAt
- *         description: Sıralama alanı
+ *         description: Sıralama kriteri
  *       - in: query
  *         name: sortOrder
  *         schema:
@@ -141,13 +232,122 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
  *         schema:
  *           type: number
  *         description: Maksimum fiyat
+ *       - in: query
+ *         name: supplier
+ *         schema:
+ *           type: string
+ *         description: Tedarikçi filtresi
+ *       - in: query
+ *         name: tags
+ *         schema:
+ *           type: string
+ *         description: Tag filtresi (virgülle ayrılmış)
+ *       - in: query
+ *         name: barcode
+ *         schema:
+ *           type: string
+ *         description: Barkod numarası
  *     responses:
  *       200:
- *         description: Ürünler başarıyla getirildi
+ *         description: Ürün listesi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Product'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     current:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrev:
+ *                       type: boolean
+ *                     limit:
+ *                       type: integer
+ *                 filters:
+ *                   type: object
+ *                   description: Uygulanan filtreler
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalValue:
+ *                       type: number
+ *                     avgPrice:
+ *                       type: number
+ *                     lowStockCount:
+ *                       type: number
+ *                     outOfStockCount:
+ *                       type: number
  *       401:
  *         description: Yetkisiz erişim
  */
-router.get('/', authenticateToken, getProducts);
+router.get('/', getProducts);
+
+/**
+ * @swagger
+ * /api/products/search:
+ *   get:
+ *     summary: Gelişmiş ürün araması
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 2
+ *         description: Arama terimi
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *           default: name,code,description
+ *         description: Aranacak alanlar (virgülle ayrılmış)
+ *       - in: query
+ *         name: fuzzy
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Bulanık arama aktif/pasif
+ *     responses:
+ *       200:
+ *         description: Arama sonuçları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 query:
+ *                   type: string
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/Product'
+ *                       - type: object
+ *                         properties:
+ *                           _score:
+ *                             type: number
+ */
+router.get('/search', searchProducts);
 
 /**
  * @swagger
@@ -163,7 +363,132 @@ router.get('/', authenticateToken, getProducts);
  *       401:
  *         description: Yetkisiz erişim
  */
-router.get('/statistics', authenticateToken, getStatistics);
+router.get('/statistics', getStatistics);
+
+/**
+ * @swagger
+ * /api/products/low-stock:
+ *   get:
+ *     summary: Düşük stoklu ürünleri getir
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Maksimum sonuç sayısı
+ *       - in: query
+ *         name: includeOutOfStock
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Stokta olmayan ürünleri dahil et
+ *     responses:
+ *       200:
+ *         description: Düşük stoklu ürünler listesi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Product'
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalProducts:
+ *                       type: number
+ *                     totalValue:
+ *                       type: number
+ *                     byCategory:
+ *                       type: object
+ *                     criticalProducts:
+ *                       type: number
+ */
+router.get('/low-stock', getLowStockProducts);
+
+/**
+ * @swagger
+ * /api/products/out-of-stock:
+ *   get:
+ *     summary: Stokta olmayan ürünleri getir
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stokta olmayan ürünler ve analiz
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Product'
+ *                 analysis:
+ *                   type: object
+ *                   properties:
+ *                     totalOutOfStock:
+ *                       type: number
+ *                     bySupplier:
+ *                       type: object
+ *                     estimatedLoss:
+ *                       type: number
+ *                     categories:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ */
+router.get('/out-of-stock', getOutOfStockProducts);
+
+/**
+ * @swagger
+ * /api/products/price-range:
+ *   get:
+ *     summary: Fiyat aralığına göre ürün dağılımı
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Fiyat aralığı dağılımı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       range:
+ *                         type: string
+ *                       count:
+ *                         type: number
+ *                       totalValue:
+ *                         type: number
+ *                       avgStock:
+ *                         type: number
+ */
+router.get('/price-range', getProductsByPriceRange);
 
 /**
  * @swagger
@@ -188,7 +513,10 @@ router.get('/statistics', authenticateToken, getStatistics);
  *       401:
  *         description: Yetkisiz erişim
  */
-router.get('/:id', authenticateToken, getProduct);
+router.get('/:id', getProduct);
+
+// Admin only routes
+router.use(requireAdmin); // Bu noktadan sonra admin yetkisi gerekir
 
 /**
  * @swagger
@@ -227,7 +555,7 @@ router.get('/:id', authenticateToken, getProduct);
  *       403:
  *         description: Admin yetkisi gerekli
  */
-router.post('/', authenticateToken, requireAdmin, createProduct);
+router.post('/', createProduct);
 
 /**
  * @swagger
@@ -262,7 +590,7 @@ router.post('/', authenticateToken, requireAdmin, createProduct);
  *       403:
  *         description: Admin yetkisi gerekli
  */
-router.put('/:id', authenticateToken, requireAdmin, updateProduct);
+router.put('/:id', updateProduct);
 
 /**
  * @swagger
@@ -289,7 +617,7 @@ router.put('/:id', authenticateToken, requireAdmin, updateProduct);
  *       403:
  *         description: Admin yetkisi gerekli
  */
-router.delete('/:id', authenticateToken, requireAdmin, deleteProduct);
+router.delete('/:id', deleteProduct);
 
 /**
  * @swagger
@@ -325,6 +653,10 @@ router.delete('/:id', authenticateToken, requireAdmin, deleteProduct);
  *                 enum: [set, add, subtract]
  *                 description: İşlem türü
  *                 example: "add"
+ *               note:
+ *                 type: string
+ *                 description: Açıklama notu
+ *                 example: "Yeni parti geldi"
  *     responses:
  *       200:
  *         description: Stok başarıyla güncellendi
@@ -337,6 +669,6 @@ router.delete('/:id', authenticateToken, requireAdmin, deleteProduct);
  *       403:
  *         description: Admin yetkisi gerekli
  */
-router.patch('/:id/stock', authenticateToken, requireAdmin, updateStock);
+router.patch('/:id/stock', updateStock);
 
 module.exports = router;
