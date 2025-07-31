@@ -187,7 +187,43 @@ productSchema.statics.findLowStock = function() {
 productSchema.statics.findOutOfStock = function() {
     return this.find({ stockStatus: 'out-of-stock', status: 'active' });
 };
+images: [{
+    url: {
+        type: String,
+        required: true
+    },
+    publicId: {
+        type: String, // Cloudinary public ID
+        default: null
+    },
+    alt: {
+        type: String,
+        default: ''
+    },
+    isPrimary: {
+        type: Boolean,
+        default: false
+    },
+    uploadedAt: {
+        type: Date,
+        default: Date.now
+    }
+}],
 
+// Virtual field ekle (ana resim için):
+productSchema.virtual('primaryImage').get(function() {
+    const primary = this.images.find(img => img.isPrimary);
+    return primary ? primary.url : null;
+});
+
+// Helper method ekle:
+productSchema.methods.getPrimaryImage = function() {
+    const primary = this.images.find(img => img.isPrimary);
+    return primary || this.images[0] || null;
+};
+
+// Index ekle (performans için):
+productSchema.index({ 'images.isPrimary': 1 });
 productSchema.statics.getStatistics = function() {
     return this.aggregate([
         { $match: { status: 'active' } },

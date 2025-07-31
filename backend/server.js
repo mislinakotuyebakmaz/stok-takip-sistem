@@ -4,12 +4,13 @@ const cors = require('cors');
 require('dotenv').config();
 
 
-const { swaggerUi, specs } = require('./config/swagger');
+const { swaggerUi, specs, swaggerUiOptions } = require('./config/swagger');
 
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products'); 
 const reportRoutes = require('./routes/report'); 
-
+const uploadRoutes = require('./routes/upload');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -26,12 +27,17 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+app.use('/api-docs', 
+    swaggerUi.serve, 
+    swaggerUi.setup(specs, swaggerUiOptions)
+);
 
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.use('/api/products', productRoutes);
 app.use('/api/reports', reportRoutes); 
