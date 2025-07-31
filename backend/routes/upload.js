@@ -251,6 +251,10 @@ router.delete('/product/:productId/image/:imageId', deleteProductImage);
  *       404:
  *         description: Ürün veya resim bulunamadı
  */
+
+
+
+
 router.patch('/product/:productId/image/:imageId/primary', setPrimaryImage);
 
 module.exports = router;
